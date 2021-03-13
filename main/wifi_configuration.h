@@ -11,7 +11,7 @@
 #define __WIFI_CONFIGURATION__
 
 #define WIFI_SSID "DAP"
-#define WIFI_PASS "12345678"
+#define WIFI_PASS "123456789"
 
 #define PORT 3240
 
