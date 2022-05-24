@@ -46,6 +46,7 @@
 #include <string.h>
 
 #include "main/dap_configuration.h"
+#include "main/wifi_configuration.h"
 #include "main/timer.h"
 
 #include "components/DAP/include/cmsis_compiler.h"
@@ -219,7 +220,7 @@ __STATIC_INLINE uint8_t DAP_GetSerNumString(char *str)
 // LED_BUILTIN
 #define PIN_LED_CONNECTED 2
 // LED_BUILTIN
-#define PIN_LED_RUNNING 15
+#define PIN_LED_RUNNING _ // won't be used
 
 //**************************************************************************************************
 /**
@@ -617,6 +618,7 @@ It is recommended to provide the following LEDs for status indication:
  */
 __STATIC_INLINE void LED_CONNECTED_OUT(uint32_t bit)
 {
+#if (!defined USE_UART_BRIDGE || USE_UART_BRIDGE == 0)
   if (bit)
   {
     //set bit
@@ -627,6 +629,7 @@ __STATIC_INLINE void LED_CONNECTED_OUT(uint32_t bit)
     //reset bit
     GPIO.out_w1tc |= (0x1 << PIN_LED_CONNECTED);
   }
+#endif
 }
 
 /**
@@ -638,16 +641,16 @@ __STATIC_INLINE void LED_CONNECTED_OUT(uint32_t bit)
  */
 __STATIC_INLINE void LED_RUNNING_OUT(uint32_t bit)
 {
-  if (bit)
-  {
-    //set bit
-    GPIO.out_w1ts |= (0x1 << PIN_LED_RUNNING);
-  }
-  else
-  {
-    //reset bit
-    GPIO.out_w1tc |= (0x1 << PIN_LED_RUNNING);
-  }
+  // if (bit)
+  // {
+  //   //set bit
+  //   GPIO.out_w1ts |= (0x1 << PIN_LED_RUNNING);
+  // }
+  // else
+  // {
+  //   //reset bit
+  //   GPIO.out_w1tc |= (0x1 << PIN_LED_RUNNING);
+  // }
 }
 
 ///@}
@@ -700,14 +703,17 @@ __STATIC_INLINE void DAP_SETUP(void)
   GPIO_FUNCTION_SET(PIN_TDI);
   GPIO_FUNCTION_SET(PIN_nTRST);
   GPIO_FUNCTION_SET(PIN_nRESET);
+#if (!defined USE_UART_BRIDGE || USE_UART_BRIDGE == 0)
   GPIO_FUNCTION_SET(PIN_LED_CONNECTED);
-  GPIO_FUNCTION_SET(PIN_LED_RUNNING);
+#endif
+  // GPIO_FUNCTION_SET(PIN_LED_RUNNING);
 
 
   // Configure: LED as output (turned off)
-
+#if (!defined USE_UART_BRIDGE || USE_UART_BRIDGE == 0)
   GPIO_SET_DIRECTION_NORMAL_OUT(PIN_LED_CONNECTED);
-  GPIO_SET_DIRECTION_NORMAL_OUT(PIN_LED_RUNNING);
+#endif
+  // GPIO_SET_DIRECTION_NORMAL_OUT(PIN_LED_RUNNING);
 
   LED_CONNECTED_OUT(0);
   LED_RUNNING_OUT(0);

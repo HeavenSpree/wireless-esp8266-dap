@@ -1,10 +1,11 @@
 /**
  * @file DAP_handle.c
  * @brief Handle DAP packets and transaction push
- * @version 0.4
+ * @version 0.5
  * @change: 2020.02.04 first version
  *          2020.11.11 support WinUSB mode
  *          2021.02.17 support SWO
+ *          2021.10.03 try to handle unlink behavior
  *
  * @copyright Copyright (c) 2021
  *
@@ -16,6 +17,7 @@
 #include "main/usbip_server.h"
 #include "main/DAP_handle.h"
 #include "main/dap_configuration.h"
+#include "main/wifi_configuration.h"
 
 #include "components/USBIP/usb_descriptor.h"
 #include "components/DAP/include/DAP.h"
@@ -30,6 +32,12 @@
 #include "lwip/sockets.h"
 #include "lwip/sys.h"
 #include <lwip/netdb.h>
+
+#if ((USE_MDNS == 1) || (USE_OTA == 1))
+    #define DAP_BUFFER_NUM 10
+#else
+    #define DAP_BUFFER_NUM 20
+#endif
 
 #if (USE_WINUSB == 1)
 typedef struct
@@ -140,8 +148,8 @@ void SWO_QueueTransfer(uint8_t *buf, uint32_t num)
 
 void DAP_Thread(void *argument)
 {
-    dap_dataIN_handle = xRingbufferCreate(DAP_HANDLE_SIZE * 20, RINGBUF_TYPE_BYTEBUF);
-    dap_dataOUT_handle = xRingbufferCreate(DAP_HANDLE_SIZE * 20, RINGBUF_TYPE_BYTEBUF);
+    dap_dataIN_handle = xRingbufferCreate(DAP_HANDLE_SIZE * DAP_BUFFER_NUM, RINGBUF_TYPE_BYTEBUF);
+    dap_dataOUT_handle = xRingbufferCreate(DAP_HANDLE_SIZE * DAP_BUFFER_NUM, RINGBUF_TYPE_BYTEBUF);
     data_response_mux = xSemaphoreCreateMutex();
     size_t packetSize;
     int resLength;
@@ -164,8 +172,8 @@ void DAP_Thread(void *argument)
                 vRingbufferDelete(dap_dataOUT_handle);
                 dap_dataIN_handle = dap_dataOUT_handle = NULL;
 
-                dap_dataIN_handle = xRingbufferCreate(DAP_HANDLE_SIZE * 20, RINGBUF_TYPE_BYTEBUF);
-                dap_dataOUT_handle = xRingbufferCreate(DAP_HANDLE_SIZE * 20, RINGBUF_TYPE_BYTEBUF);
+                dap_dataIN_handle = xRingbufferCreate(DAP_HANDLE_SIZE * DAP_BUFFER_NUM, RINGBUF_TYPE_BYTEBUF);
+                dap_dataOUT_handle = xRingbufferCreate(DAP_HANDLE_SIZE * DAP_BUFFER_NUM, RINGBUF_TYPE_BYTEBUF);
                 if (dap_dataIN_handle == NULL || dap_dataIN_handle == NULL)
                 {
                     os_printf("Can not create DAP ringbuf/mux!\r\n");
@@ -260,9 +268,43 @@ int fast_reply(uint8_t *buf, uint32_t length)
             buf_header->u.ret_submit.status = 0;
             buf_header->u.ret_submit.data_length = 0;
             buf_header->u.ret_submit.error_count = 0;
-            send(kSock, buf, 48, 0);
+            usbip_network_send(kSock, buf, 48, 0);
             return 1;
         }
     }
     return 0;
+}
+
+void handle_dap_unlink()
+{
+    // `USBIP_CMD_UNLINK` means calling `usb_unlink_urb()` or `usb_kill_urb()`.
+    // Note that execution of an URB is inherently an asynchronous operation, and there may be
+    // synchronization problems in the following solutions.
+
+    // One of the reasons this happens is that the host wants to abort the URB transfer operation
+    // as soon as possible. USBIP network fluctuations will also cause this error, but I don't know
+    // whether this is the main reason.
+
+    // Unlink may be applied to zero length URB of "DIR_IN", or a URB containing data.
+    // In the case of unlink, for the new "DIR_IN" request, it may always return an older response,
+    // which will lead to panic. This code is a compromise for eliminating the lagging response
+    // caused by UNLINK. It will clean up the buffers that may have data for return to the host.
+    // In general, we assume that there is at most one piece of data that has not yet been returned.
+    if (dap_respond > 0)
+    {
+        DapPacket_t *item;
+        size_t packetSize = 0;
+        item = (DapPacket_t *)xRingbufferReceiveUpTo(dap_dataOUT_handle, &packetSize,
+                                                     pdMS_TO_TICKS(10), DAP_HANDLE_SIZE);
+        if (packetSize == DAP_HANDLE_SIZE)
+        {
+            if (xSemaphoreTake(data_response_mux, portMAX_DELAY) == pdTRUE)
+            {
+                --dap_respond;
+                xSemaphoreGive(data_response_mux);
+            }
+
+            vRingbufferReturnItem(dap_dataOUT_handle, (void *)item);
+        }
+    }
 }

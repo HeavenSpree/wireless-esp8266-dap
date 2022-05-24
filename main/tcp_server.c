@@ -7,8 +7,6 @@
  * @copyright Copyright (c) 2020
  *
  */
-#include "tcp_server.h"
-
 #include <string.h>
 #include <stdint.h>
 #include <sys/param.h>
@@ -170,7 +168,8 @@ void tcp_server_task(void *pvParameters)
 
                 // Restart DAP Handle
                 kRestartDAPHandle = 1;
-                xTaskNotifyGive(kDAPTaskHandle);
+                if (kDAPTaskHandle)
+                    xTaskNotifyGive(kDAPTaskHandle);
 
                 //shutdown(listen_sock, 0);
                 //close(listen_sock);

@@ -9,6 +9,7 @@ test
 
 [![](https://img.shields.io/badge/license-MIT-green.svg?style=flat-square)](https://github.com/windowsair/wireless-esp8266-dap/LICENSE)　[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-blue.svg?style=flat-square)](https://github.com/windowsair/wireless-esp8266-dap/pulls)　[![%e2%9d%a4](https://img.shields.io/badge/made%20with-%e2%9d%a4-ff69b4.svg?style=flat-square)](https://github.com/windowsair/wireless-esp8266-dap)
 
+[中文](README_CN.md)
 
 ## Introduce
 
@@ -16,7 +17,7 @@ Wireless debugging with ***only one ESP8266*** !
 
 Realized by USBIP and CMSIS-DAP protocol stack.
 
-> 👉 5m distance, 100kb size firmware(Hex) flash test:
+> 👉 5m range, 100kb size firmware(Hex) earse and download test:
 
 <p align="center"><img src="https://user-images.githubusercontent.com/17078589/120925694-4bca0d80-c70c-11eb-91b7-ffa54770faea.gif"/></p>
 
@@ -31,12 +32,10 @@ Realized by USBIP and CMSIS-DAP protocol stack.
     - [x] USB-HID
     - [x] WCID & WinUSB (Default)
 
-3. Debug Trace
-    - [ ] UART Serial Wire Output(SWO)
-    - [ ] SWO Streaming Trace
+3. Debug Trace (Uart)
+    - [x] Uart TCP Bridge
 
 4. More..
-    - [x] Custom maximum debug clock (40MHz, SWD only)
     - [x] SWD protocol based on SPI acceleration
     - [x] ...
 
@@ -46,25 +45,28 @@ Realized by USBIP and CMSIS-DAP protocol stack.
 
 ### WIFI
 
-The default connected WIFI SSID is `DAP` , password `12345678`
+The default connected WIFI SSID is `DAP` or `OTA` , password `12345678`
 
-You can change `WIFI_SSID` and ` WIFI_PASS` in [wifi_configuration.h](main/wifi_configuration.h)
+Support for specifying multiple possible WAP. It can be added here: [wifi_configuration.h](main/wifi_configuration.h)
 
 You can also specify your IP in the above file (We recommend using the static address binding feature of the router).
 
 ![WIFI](https://user-images.githubusercontent.com/17078589/118365659-517e7880-b5d0-11eb-9a5b-afe43348c2ba.png)
 
+
+There is built-in ipv4 only mDNS server. You can access the device using `dap.local` .
+
+![mDNS](https://user-images.githubusercontent.com/17078589/149659052-7b29533f-9660-4811-8125-f8f50490d762.png)
+
+
+
 ### Debugger
-
-
 
 
 | SWD            |        |
 |----------------|--------|
 | SWCLK          | GPIO14 |
 | SWDIO          | GPIO13 |
-| LED\_CONNECTED | GPIO2  |
-| LED\_RUNNING   | GPIO15 |
 | TVCC           | 3V3    |
 | GND            | GND    |
 
@@ -80,22 +82,32 @@ You can also specify your IP in the above file (We recommend using the static ad
 | TDO                | GPIO16  |
 | nTRST \(optional\) | GPIO0\* |
 | nRESET             | GPIO5   |
-| LED\_CONNECTED     | GPIO2   |
-| LED\_RUNNING       | GPIO15  |
 | TVCC               | 3V3     |
 | GND                | GND     |
 
+--------------
+
+| Other              |               |
+|--------------------|---------------|
+| LED\_WIFI\_STATUS  | GPIO15        |
+| Tx                 | GPIO2         |
+| Rx                 | GPIO3 (U0RXD) |
+
+> Rx and Tx is used for uart bridge, not enabled by default.
+
+----
+
+## Hardware Reference
+
+Here we provide a simple example for reference:
+
+![sch](https://user-images.githubusercontent.com/17078589/150284806-e6dff0fa-4fe1-4d86-ac45-3b657fbea6b7.png)
 
 
-Here, we give a simple example for reference:
-
-![sch](https://user-images.githubusercontent.com/17078589/120953707-2a0a6e00-c780-11eb-9ad8-7221cf847974.png)
-
-Alternatively, you can connect directly with wires as we gave at the beginning, without additional circuits.
+***Alternatively, you can connect directly with wires as we gave at the beginning, without additional circuits.***
 
 
-> If you need to modify the LED or JTAG pins, please refer to the instructions in [DAP_config.h](components/DAP/config/DAP_config.h) to modify them carefully.
-
+In addition, a complete hardware reference design is available from contributors, see [circuit](circuit)
 
 ------
 
@@ -113,8 +125,7 @@ See: [Build with Github Action](https://github.com/windowsair/wireless-esp8266-d
 
 1. Get ESP8266 RTOS Software Development Kit
 
-    For now, use the 3.3-rc1 version of the SDK (this is a known issue)
-    See: [ESP8266_RTOS_SDK](https://github.com/espressif/ESP8266_RTOS_SDK/releases/tag/v3.3-rc1 "ESP8266_RTOS_SDK")
+    The SDK is already included in the project, please use it for subsequent operations.
 
 2. Build & Flash
 
@@ -169,8 +180,33 @@ Here, we use MDK for testing:
 
 ------
 
+## FAQ
 
-## Speed Strategy
+### Keil is showing a "RDDI-DAP ERROR" or "SWD/JTAG Communication Failure" message.
+
+1. Check your line connection. Don't forget the 3v3 connection cable.
+2. Check that your network connection is stable.
+
+
+### DAP is slow or often abnormal.
+
+Note that this project is sensitive to the network environment. If you are using a hotspot on your computer, you can try using network analyzer such as wireshark to observe the status of your AP network. During the idle time, the network should stay silent, while in the working state, there should be no too much packet loss.
+
+Some LAN broadcast packets can cause serious impact, including:
+- DropBox LAN Sync
+- Logitech Arx Control
+- ...
+
+For ESP8266, this is not far from UDP FLOOD...😰
+
+It is also affected by the surrounding radio environment, your AP situation (some NICs have terrible AP performance), distance, etc.
+
+
+----
+
+## Document
+
+### Speed Strategy
 
 The maximum rate of esp8266 pure IO is about 2MHz.
 When you select max clock, we will take the following actions:
@@ -182,7 +218,7 @@ When you select max clock, we will take the following actions:
 > Note that the most significant speed constraint of this project is still the TCP connection speed.
 
 
-## For OpenOCD user
+### For OpenOCD user
 
 This project was originally designed to run on Keil, but now you can also perform firmware flash on OpenOCD.
 
@@ -192,27 +228,85 @@ Note that if you want to use a 40MHz SPI acceleration, you need to specify the s
 # Run before approaching the flash command
 > adapter speed 10000
 
-# > halt
-# > flash write_image [erase] [unlock] filename [offset] [type]
+> halt
+> flash write_image [erase] [unlock] filename [offset] [type]
 ```
 
 > Keil's timing handling is somewhat different from OpenOCD's. For example, OpenOCD lacks the SWD line reset sequence before reading the `IDCODE` registers.
 
 
+### System OTA
+
+When this project is updated, you can update the firmware over the air.
+
+Visit the following website for OTA operations: [online OTA](http://corsacota.surge.sh/?address=dap.local:3241)
+
+
+For most ESP8266 devices, you don't need to care about flash size. However, improper setting of the flash size may cause the OTA to fail. In this case, please change the flash size with `idf.py menuconfig`, or modify `sdkconfig`:
+
+```
+# Choose a flash size.
+CONFIG_ESPTOOLPY_FLASHSIZE_1MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE_2MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+
+# Then set a flash size
+CONFIG_ESPTOOLPY_FLASHSIZE="2MB"
+```
+
+If flash size is 2MB, the sdkconfig file might look like this:
+
+```
+CONFIG_ESPTOOLPY_FLASHSIZE_2MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="2MB"
+```
+
+
+For devices with 1MB flash size such as ESP8285, the following changes must be made:
+
+```
+CONFIG_PARTITION_TABLE_FILENAME="partitions_two_ota.1MB.csv"
+CONFIG_ESPTOOLPY_FLASHSIZE_1MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="1MB"
+CONFIG_ESP8266_BOOT_COPY_APP=y
+```
+
+The flash size of the board can be checked with the esptool.py tool:
+
+```bash
+esptool.py -p (PORT) flash_id
+```
+
+### Uart TCP Bridge
+
+This feature provides a bridge between TCP and Uart:
+```
+Send data   ->  TCP  ->  Uart TX -> external devices
+
+Recv data   <-  TCP  <-  Uart Rx <- external devices
+```
+
+![uart_tcp_bridge](https://user-images.githubusercontent.com/17078589/150290065-05173965-8849-4452-ab7e-ec7649f46620.jpg)
+
+When the TCP connection is established, bridge will try to resolve the text sent for the first time. When the text is a valid baud rate, bridge will switch to it.
+For example, sending the ASCII text `115200` will switch the baud rate to 115200.
+
+
+For performance reasons, this feature is not enabled by default. You can modify [wifi_configuration.h](main/wifi_configuration.h) to turn it on.
+
+
+----
+
 ## Develop
 
-0.  Check other branches to know the latest development progress.
+Check other branches to know the latest development progress.
 
-1. Use WinUSB Mode(enabled by default):
+Any kind of contribute is welcome, including but not limited to new features, ideas about circuits, documentation.
 
-    change `USE_WINUSB` macor in [dap_configuration.h](main/dap_configuration.h)
+You can also ask questions to make this project better.
 
-
-
-In this repo you can find the complete implementation of the USB protocol stack including USB-HID, WCID, WinUSB. ~~Although WinUSB-based mode currently does not work on USBIP~~ :disappointed_relieved: . They are very easy and can help you quickly build your own DAP on other hardware platforms.
-
-
-Currently TCP transmission speed needs to be further improved, If you have any ideas, welcome:
 - [New issues](https://github.com/windowsair/wireless-esp8266-dap/issues)
 - [New pull](https://github.com/windowsair/wireless-esp8266-dap/pulls)
 
@@ -245,7 +339,7 @@ We will continue to try to make it work on USB HID. Once the USBIP problem is so
 
 ------
 
-# Credit
+## Credit
 
 
 Credits to the following project, people and organizations:
@@ -258,7 +352,10 @@ Credits to the following project, people and organizations:
 - [@HeavenSpree](https://www.github.com/HeavenSpree)
 - [@Zy19930907](https://www.github.com/Zy19930907)
 - [@caiguang1997](https://www.github.com/caiguang1997)
+- [@ZhuYanzhen1](https://www.github.com/ZhuYanzhen1)
 
 
 ## License
+
 [MIT LICENSE](LICENSE)
+
